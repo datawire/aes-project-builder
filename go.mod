@@ -13,5 +13,6 @@ require (
 	github.com/GoogleContainerTools/kaniko v0.19.0
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/sirupsen/logrus v1.5.0
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	gopkg.in/src-d/go-git.v4 v4.13.1
 )

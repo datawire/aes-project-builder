@@ -1,16 +1,20 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/GoogleContainerTools/kaniko/pkg/constants"
 	"github.com/kballard/go-shellquote"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	libgit "gopkg.in/src-d/go-git.v4"
 	libgitPlumbing "gopkg.in/src-d/go-git.v4/plumbing"
@@ -112,10 +116,33 @@ func Main(args Args) error {
 
 	kanikoArgs := append([]string{"/kaniko/executor", "--context=dir://" + constants.BuildContextDir}, args.KanikoFlags...)
 	mockCmd(kanikoArgs...)
-	if err := syscall.Exec(kanikoArgs[0], kanikoArgs, os.Environ()); err != nil {
-		return &os.PathError{"exec", kanikoArgs[0], err}
+	cmd := exec.Command(kanikoArgs[0], kanikoArgs[1:]...)
+	// Run kaniko, filtering out spurious errors.
+	//
+	// TODO: Figure out how to get kaniko to not spit these out.
+	reader, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
 	}
-	return nil
+	cmd.Stderr = cmd.Stdout
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	wg, _ := errgroup.WithContext(context.Background())
+	wg.Go(cmd.Wait)
+	wg.Go(func() error {
+		scanner := bufio.NewScanner(reader)
+		re := regexp.MustCompile(`^ERROR:\s+logging\s+before\s+flag.Parse:.*$`)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if re.MatchString(line) {
+				continue
+			}
+			fmt.Println(line)
+		}
+		return scanner.Err()
+	})
+	return wg.Wait()
 }
 
 func main() {
