@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,7 +13,6 @@ import (
 	"github.com/GoogleContainerTools/kaniko/pkg/constants"
 	"github.com/kballard/go-shellquote"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 
 	libgit "gopkg.in/src-d/go-git.v4"
 	libgitPlumbing "gopkg.in/src-d/go-git.v4/plumbing"
@@ -128,21 +126,22 @@ func Main(args Args) error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	wg, _ := errgroup.WithContext(context.Background())
-	wg.Go(cmd.Wait)
-	wg.Go(func() error {
-		scanner := bufio.NewScanner(reader)
-		re := regexp.MustCompile(`^ERROR:\s+logging\s+before\s+flag.Parse:.*$`)
-		for scanner.Scan() {
-			line := scanner.Text()
-			if re.MatchString(line) {
-				continue
-			}
-			fmt.Println(line)
+
+	scanner := bufio.NewScanner(reader)
+	re := regexp.MustCompile(`^ERROR:\s+logging\s+before\s+flag.Parse:.*$`)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if re.MatchString(line) {
+			continue
 		}
-		return scanner.Err()
-	})
-	return wg.Wait()
+		fmt.Println(line)
+	}
+	err = scanner.Err()
+	if err != nil {
+		logrus.Error(err)
+	}
+
+	return cmd.Wait()
 }
 
 func main() {
