@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -127,18 +128,24 @@ func Main(args Args) error {
 		return err
 	}
 
-	scanner := bufio.NewScanner(reader)
+	lineReader := bufio.NewReader(reader)
 	re := regexp.MustCompile(`^ERROR:\s+logging\s+before\s+flag.Parse:.*$`)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if re.MatchString(line) {
+	for {
+		line, isPrefix, err := lineReader.ReadLine()
+		if err != nil {
+			if err != io.EOF {
+				logrus.Error(err)
+			}
+			break
+		}
+		if !isPrefix && re.MatchString(string(line)) {
 			continue
 		}
-		fmt.Println(line)
-	}
-	err = scanner.Err()
-	if err != nil {
-		logrus.Error(err)
+		if isPrefix {
+			fmt.Print(string(line))
+		} else {
+			fmt.Println(string(line))
+		}
 	}
 
 	return cmd.Wait()
